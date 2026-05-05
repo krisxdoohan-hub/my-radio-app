@@ -208,27 +208,28 @@
         // --- 【全域變數與資料】 ---
         
         // 廣播電台串流網址 - 全部更換為 HTTPS 以符合行動端瀏覽器安全性
-        // 請將此字串替換成您剛剛建立並取得的 Worker 網址
-const PROXY_URL = 'https://tw-radio-proxy.krisx-doohan.workers.dev/?url=';
+       // 【修改1】：結尾直接留斜線，不要加上 ?url=
+const PROXY_URL = 'https://tw-radio-proxy.krisx-doohan.workers.dev/';
 
 const STATION_DATA = {
     'hitfm': {
         name: 'Hit Fm 聯播網',
         freq: 'FM 107.7 (台北)',
-        // 使用 encodeURIComponent 確保網址符號不會衝突
-        url: PROXY_URL + encodeURIComponent('https://hls.hinet.net/live/RA000036/chunklist.m3u8'),
+        // 【修改2】：直接相加，移除 encodeURIComponent，並確認使用 http://
+        url: PROXY_URL + 'http://hls.hinet.net/live/RA000036/chunklist.m3u8',
         type: 'hls'
     },
     'pop': {
         name: 'Pop Radio 91.7',
         freq: 'FM 91.7 (台北)',
-        url: PROXY_URL + encodeURIComponent('https://bms.hinet.net/PopRadio/stream'),
-        type: 'audio' 
+        // 其他電台也比照辦理
+        url: PROXY_URL + 'http://bms.hinet.net/PopRadio/stream',
+        type: 'audio'
     },
     'kiss': {
         name: 'KISS RADIO',
         freq: 'FM 99.9 (大眾)',
-        url: PROXY_URL + encodeURIComponent('https://bms.hinet.net/KISS_RADIO/stream'),
+        url: PROXY_URL + 'http://bms.hinet.net/KISS_RADIO/stream',
         type: 'audio'
     }
 };
