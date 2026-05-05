@@ -1,0 +1,20 @@
+{
+  "name": "Taiwan Radio Player",
+  "short_name": "TW Radio",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "icons": [
+    {
+      "src": "https://api.iconify.design/ph:radio-bold.svg?color=%233b82f6&width=192&height=192",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "https://api.iconify.design/ph:radio-bold.svg?color=%233b82f6&width=512&height=512",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
