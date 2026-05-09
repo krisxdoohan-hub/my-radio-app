@@ -9,9 +9,9 @@
    每次更新 index.html 的 APP_VERSION 時，
    請同步修改此處的版本字串，
    瀏覽器才會捨棄舊快取並重新下載所有資源。
-   目前版本：v0.0.0
+   目前版本：v0.0.1
 ── */
-const CACHE_NAME  = 'tw-radio-v0.0.0';
+const CACHE_NAME  = 'tw-radio-v0.0.1';
 
 // 需要離線快取的 Shell 資源
 const SHELL_URLS = [
