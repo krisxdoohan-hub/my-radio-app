@@ -1,579 +1,818 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>台灣廣播精選 Taiwan Radio</title>
-    <!-- 【標頭與外觀】 -->
-    <link rel="manifest" href="./manifest.json">
-    <meta name="theme-color" content="#111827">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="https://api.iconify.design/ph:radio-bold.svg?color=%233b82f6&width=192&height=192">
-    
-    <!-- HLS.js CDN for m3u8 streams -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Phosphor Icons CDN -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    
-    <style>
-        body { 
-            margin: 0; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            background-color: #111827; 
-            color: white; 
-            user-select: none; 
-            -webkit-tap-highlight-color: transparent;
-        }
-        .glass-panel { 
-            background: rgba(31, 41, 55, 0.7); 
-            backdrop-filter: blur(12px); 
-            -webkit-backdrop-filter: blur(12px); 
-            border: 1px solid rgba(255, 255, 255, 0.1); 
-        }
-        .station-btn {
-            transition: all 0.2s ease-in-out;
-        }
-        .station-btn.active { 
-            border-color: #3b82f6; 
-            background-color: rgba(59, 130, 246, 0.15); 
-            box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
-        }
-        .station-btn:active {
-            transform: scale(0.96);
-        }
-        input[type="range"] { 
-            accent-color: #3b82f6; 
-        }
-        /* Custom scrollbar for history */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
-        
-        /* Audio viz animation */
-        .playing-bars { display: none; gap: 3px; align-items: flex-end; height: 24px; }
-        .playing-bars span { width: 4px; background: #3b82f6; border-radius: 2px; animation: bounce 1s infinite alternate; }
-        .playing-bars span:nth-child(2) { animation-delay: 0.3s; }
-        .playing-bars span:nth-child(3) { animation-delay: 0.6s; }
-        @keyframes bounce {
-            0% { height: 4px; }
-            100% { height: 24px; }
-        }
-        .is-playing .playing-bars { display: flex; }
-        
-        .hidden { display: none !important; }
-    </style>
+  <!-- ============================================================
+       台灣廣播播放器 PWA  |  Taiwan Radio PWA
+       單一 index.html — Vanilla JS + Tailwind CDN + Phosphor Icons
+       作者備注：將此檔案與 manifest.json / sw.js 放同目錄即可運作
+  ============================================================ -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="台灣廣播 PWA — Hit FM / Pop Radio / KISS Radio" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="台灣廣播" />
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="./manifest.json" />
+  <!-- Apple Touch Icon (可自行替換 icon.png) -->
+  <link rel="apple-touch-icon" href="./icon.png" />
+
+  <title>台灣廣播 — 線上收聽</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Phosphor Icons CDN -->
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js"></script>
+
+  <style>
+    /* ── 自訂字型與全域變數 ── */
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Space+Grotesk:wght@400;600;700&display=swap');
+
+    :root {
+      --bg-primary:   #0f172a;
+      --bg-card:      #1e293b;
+      --bg-hover:     #334155;
+      --accent:       #38bdf8;
+      --accent-glow:  rgba(56,189,248,0.25);
+      --text-primary: #f1f5f9;
+      --text-muted:   #94a3b8;
+      --hit-color:    #f472b6;   /* Hit FM — 粉紅 */
+      --pop-color:    #a78bfa;   /* Pop Radio — 紫 */
+      --kiss-color:   #34d399;   /* KISS Radio — 綠 */
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 卡片底色 */
+    .card { background: var(--bg-card); border-radius: 1rem; }
+
+    /* 選中電台按鈕光暈效果 */
+    .station-btn.active-hit  { border-color: var(--hit-color);  box-shadow: 0 0 18px rgba(244,114,182,0.4); }
+    .station-btn.active-pop  { border-color: var(--pop-color);  box-shadow: 0 0 18px rgba(167,139,250,0.4); }
+    .station-btn.active-kiss { border-color: var(--kiss-color); box-shadow: 0 0 18px rgba(52,211,153,0.4);  }
+
+    .station-btn {
+      transition: border-color 0.3s, box-shadow 0.3s, background 0.2s;
+      border: 2px solid transparent;
+    }
+    .station-btn:hover { background: var(--bg-hover); }
+
+    /* 播放動畫波形 */
+    @keyframes barPulse {
+      0%, 100% { transform: scaleY(0.3); }
+      50%       { transform: scaleY(1);   }
+    }
+    .bar { display: inline-block; width: 4px; height: 20px; border-radius: 2px; transform-origin: bottom; }
+    .bar-1 { animation: barPulse 0.9s ease-in-out infinite;       }
+    .bar-2 { animation: barPulse 0.9s ease-in-out 0.15s infinite; }
+    .bar-3 { animation: barPulse 0.9s ease-in-out 0.3s infinite;  }
+    .bar-4 { animation: barPulse 0.9s ease-in-out 0.45s infinite; }
+    .bars-paused .bar { animation-play-state: paused; }
+
+    /* 音量滑桿自訂外觀 */
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #334155;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    /* 淡入動畫 */
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+    .fade-in { animation: fadeIn 0.4s ease both; }
+
+    /* Toast 通知 */
+    #toast {
+      position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+      background: #1e293b; border: 1px solid #334155;
+      color: #f1f5f9; padding: 0.6rem 1.4rem; border-radius: 2rem;
+      font-size: 0.85rem; pointer-events: none;
+      transition: opacity 0.4s; opacity: 0; z-index: 999;
+    }
+    #toast.show { opacity: 1; }
+
+    /* Spinner 微動畫 */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 1s linear infinite; display: inline-block; }
+  </style>
 </head>
-<body class="flex flex-col h-[100dvh] overflow-hidden">
 
-    <!-- 【UI 顯示區】 導覽列 -->
-    <nav class="flex items-center justify-between p-4 glass-panel z-10 sticky top-0">
-        <div class="text-xl font-bold flex items-center gap-2">
-            <i class="ph ph-waves text-blue-500 text-3xl"></i>
-            <span class="tracking-wider">TW<span class="text-blue-500">Radio</span></span>
-            <span id="versionBadge" class="text-[10px] text-gray-600 font-mono self-end mb-1">v0.0.0</span>
-        </div>
-        <button id="settingsBtn" class="p-2 rounded-full hover:bg-gray-800 transition active:scale-95">
-            <i class="ph ph-cloud-arrow-up text-2xl text-gray-300"></i>
-        </button>
-    </nav>
+<body class="flex flex-col min-h-screen">
 
-    <!-- 【UI 顯示區】 主要內容 (電台資訊與控制) -->
-    <main class="flex-1 flex flex-col items-center justify-evenly p-6 relative min-h-0">
-        
-        <!-- 卡片發光特效背景 -->
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-blue-600/20 rounded-full blur-[80px] -z-10 pointer-events-none transition-opacity duration-1000 opacity-20" id="glowBg"></div>
+<!-- ══════════════════════════════════════════
+     ① 導覽列 / Navbar
+══════════════════════════════════════════ -->
+<nav class="flex items-center justify-between px-5 py-4 border-b border-slate-700">
+  <div class="flex items-center gap-2">
+    <i class="ph-fill ph-radio text-sky-400 text-2xl"></i>
+    <span class="font-semibold tracking-wide text-sky-400" style="font-family:'Space Grotesk',sans-serif">台灣廣播</span>
+  </div>
 
-        <!-- 顯示資訊 -->
-        <div class="text-center w-full flex flex-col items-center gap-4" id="visualizerContainer">
-            <div class="playing-bars mb-2">
-                <span></span><span></span><span></span>
-            </div>
-            <h2 id="channelName" class="text-3xl sm:text-4xl font-extrabold text-blue-400 drop-shadow-lg transition-all line-clamp-2 px-4">選擇下方電台</h2>
-            <p id="channelFreq" class="text-lg text-gray-400 tracking-[0.2em] font-mono mt-1">Ready</p>
-        </div>
+  <div class="flex items-center gap-3">
+    <!-- 雲端同步狀態 icon -->
+    <button id="syncBtn" onclick="triggerSync()" title="立即同步至 GitHub"
+      class="text-slate-400 hover:text-sky-400 transition-colors text-xl">
+      <i class="ph ph-cloud-arrow-up"></i>
+    </button>
 
-        <!-- 播放控制區 -->
-        <div class="flex flex-col items-center gap-8 w-full max-w-sm mt-4">
-            
-            <!-- 播放按鈕 -->
-            <button id="playPauseBtn" class="w-24 h-24 flex items-center justify-center bg-gradient-to-tr from-blue-700 to-blue-500 rounded-full shadow-lg shadow-blue-600/40 active:scale-95 transition disabled:opacity-30 disabled:scale-100 text-white" disabled>
-                <i id="playIcon" class="ph-fill ph-play text-5xl ml-2"></i>
-            </button>
+    <!-- 設定 / 金鑰面板開關 -->
+    <button onclick="toggleSettings()" title="GitHub 設定"
+      class="text-slate-400 hover:text-sky-400 transition-colors text-xl">
+      <i class="ph ph-gear"></i>
+    </button>
+  </div>
+</nav>
 
-            <!-- 音量控制 -->
-            <div class="flex items-center gap-4 w-full bg-gray-800/80 p-4 rounded-2xl border border-gray-700 glass-panel">
-                <i class="ph ph-speaker-low text-gray-400 text-2xl" id="volDownIcon"></i>
-                <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.5" class="w-full flex-1">
-                <i class="ph ph-speaker-high text-gray-400 text-2xl" id="volUpIcon"></i>
-            </div>
-        </div>
+<!-- ══════════════════════════════════════════
+     ② 雲端金鑰設定區（預設隱藏）
+     使用者需要輸入 GitHub Token / Repo / 路徑
+══════════════════════════════════════════ -->
+<div id="settingsPanel" class="hidden px-4 py-4 border-b border-slate-700 fade-in">
+  <div class="card p-4 space-y-3 max-w-lg mx-auto">
+    <p class="text-sky-400 font-semibold flex items-center gap-1">
+      <i class="ph ph-key"></i> GitHub 雲端同步設定
+    </p>
+    <p class="text-slate-400 text-xs">
+      需要具有 <code class="bg-slate-700 px-1 rounded">repo</code> 權限的 Personal Access Token。
+      資料將儲存於指定 Repo 的 JSON 檔案中。
+    </p>
 
-        <!-- 【UI 顯示區】 電台選擇器 -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-2xl mt-4">
-            <button class="station-btn flex flex-row sm:flex-col items-center justify-between sm:justify-center px-6 py-4 sm:p-5 rounded-2xl glass-panel border border-gray-700 hover:border-gray-500" data-station="hitfm">
-                <div class="flex items-center gap-3 sm:flex-col sm:gap-2 text-left sm:text-center">
-                    <div class="bg-gray-800 p-2 rounded-full sm:mb-1 flex-shrink-0">
-                        <i class="ph ph-radio text-2xl text-red-400"></i>
-                    </div>
-                    <div>
-                        <div class="font-bold text-lg leading-tight text-gray-100">Hit Fm 聯播網</div>
-                        <div class="text-xs text-gray-400 font-mono mt-0.5">FM 107.7</div>
-                    </div>
-                </div>
-            </button>
-            
-            <button class="station-btn flex flex-row sm:flex-col items-center justify-between sm:justify-center px-6 py-4 sm:p-5 rounded-2xl glass-panel border border-gray-700 hover:border-gray-500" data-station="pop">
-                <div class="flex items-center gap-3 sm:flex-col sm:gap-2 text-left sm:text-center">
-                    <div class="bg-gray-800 p-2 rounded-full sm:mb-1 flex-shrink-0">
-                        <i class="ph ph-radio text-2xl text-purple-400"></i>
-                    </div>
-                    <div>
-                        <div class="font-bold text-lg leading-tight text-gray-100">Pop Radio 91.7</div>
-                        <div class="text-xs text-gray-400 font-mono mt-0.5">FM 91.7</div>
-                    </div>
-                </div>
-            </button>
-            
-            <button class="station-btn flex flex-row sm:flex-col items-center justify-between sm:justify-center px-6 py-4 sm:p-5 rounded-2xl glass-panel border border-gray-700 hover:border-gray-500" data-station="kiss">
-                <div class="flex items-center gap-3 sm:flex-col sm:gap-2 text-left sm:text-center">
-                    <div class="bg-gray-800 p-2 rounded-full sm:mb-1 flex-shrink-0">
-                        <i class="ph ph-radio text-2xl text-green-400"></i>
-                    </div>
-                    <div>
-                        <div class="font-bold text-lg leading-tight text-gray-100">KISS RADIO</div>
-                        <div class="text-xs text-gray-400 font-mono mt-0.5">FM 99.9</div>
-                    </div>
-                </div>
-            </button>
-        </div>
-    </main>
-
-    <!-- 【隱藏的雲端金鑰設定區】 -->
-    <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
-        <div class="bg-gray-900 rounded-3xl p-6 w-full max-w-md border border-gray-700 shadow-2xl relative flex flex-col max-h-[90vh]">
-            <button id="closeSettingsBtn" class="absolute top-5 right-5 text-gray-400 hover:text-white p-1 rounded-full hover:bg-gray-800 transition">
-                <i class="ph ph-x text-2xl"></i>
-            </button>
-            <h3 class="text-xl font-extrabold mb-5 flex items-center gap-2 text-white">
-                <i class="ph-fill ph-github-logo text-3xl"></i>
-                GitHub 雲端同步設定
-            </h3>
-            
-            <div class="space-y-4 overflow-y-auto pr-2 pb-2 custom-scrollbar">
-                <div>
-                    <label class="block text-xs font-semibold text-gray-400 mb-1 tracking-wide">GITHUB TOKEN (PAT)</label>
-                    <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx" class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-400 mb-1 tracking-wide">REPOSITORY OWNER (使用者名稱)</label>
-                    <input type="text" id="ghOwner" placeholder="e.g. your-username" class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-400 mb-1 tracking-wide">REPOSITORY NAME (儲存庫名稱)</label>
-                    <input type="text" id="ghRepo" placeholder="e.g. radio-data" class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-400 mb-1 tracking-wide">FILE PATH (檔案路徑)</label>
-                    <input type="text" id="ghPath" value="records.json" class="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition text-sm">
-                </div>
-                <button id="saveSettingsBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl transition mt-2 shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
-                    <i class="ph ph-arrows-merge"></i> 儲存並同步下載
-                </button>
-
-                <div class="mt-4 pt-4 border-t border-gray-800">
-                    <div class="flex items-center justify-between mb-2">
-                        <h4 class="text-sm font-bold text-gray-300">本地歷史紀錄 (將同步至雲端)</h4>
-                        <span id="syncStatus" class="text-xs text-gray-500">已就緒</span>
-                    </div>
-                    <ul id="historyList" class="flex flex-col gap-2 max-h-40 overflow-y-auto text-xs text-gray-400 py-2 border border-gray-800 rounded-lg p-2 bg-gray-800/50">
-                        <li class="text-center py-2 text-gray-600">暫無播放紀錄</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
+    <!-- GitHub Token -->
+    <div>
+      <label class="text-xs text-slate-400 block mb-1">GitHub Personal Access Token</label>
+      <input id="ghToken" type="password" placeholder="ghp_xxxxxxxxxxxx"
+        class="w-full bg-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-sky-500"
+        oninput="saveSettings()" />
     </div>
 
-    <!-- 隱藏的 Audio 標籤 -->
-    <audio id="audioPlayer" preload="none"></audio>
+    <!-- Owner / Repo -->
+    <div class="flex gap-2">
+      <div class="flex-1">
+        <label class="text-xs text-slate-400 block mb-1">GitHub 帳號 (owner)</label>
+        <input id="ghOwner" type="text" placeholder="your-username"
+          class="w-full bg-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-sky-500"
+          oninput="saveSettings()" />
+      </div>
+      <div class="flex-1">
+        <label class="text-xs text-slate-400 block mb-1">Repo 名稱</label>
+        <input id="ghRepo" type="text" placeholder="my-radio-data"
+          class="w-full bg-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-sky-500"
+          oninput="saveSettings()" />
+      </div>
+    </div>
 
-    <script>
-        /**
-         * =========================================
-         * 台灣廣播精選 (Taiwan Radio) - Vanilla JS
-         * Version: 0.0.0
-         * =========================================
-         */
+    <!-- 檔案路徑 -->
+    <div>
+      <label class="text-xs text-slate-400 block mb-1">儲存路徑 (例：data/records.json)</label>
+      <input id="ghPath" type="text" placeholder="data/records.json"
+        class="w-full bg-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-sky-500"
+        oninput="saveSettings()" />
+    </div>
 
-        // --- 【版本號】 ---
-        const APP_VERSION = '0.0.0';
-        document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
+    <!-- 操作按鈕 -->
+    <div class="flex gap-2 pt-1">
+      <button onclick="fetchGitHubData()"
+        class="flex-1 bg-slate-600 hover:bg-slate-500 text-white text-sm rounded-lg py-2 transition-colors flex items-center justify-center gap-1">
+        <i class="ph ph-cloud-arrow-down"></i> 從雲端下載
+      </button>
+      <button onclick="putGitHubData()"
+        class="flex-1 bg-sky-600 hover:bg-sky-500 text-white text-sm rounded-lg py-2 transition-colors flex items-center justify-center gap-1">
+        <i class="ph ph-cloud-arrow-up"></i> 上傳至雲端
+      </button>
+    </div>
+  </div>
+</div>
 
-        // --- 【全域變數與資料】 ---
-        
-        // 廣播電台串流網址 - 全部更換為 HTTPS 以符合行動端瀏覽器安全性
-       // 【修改1】：結尾直接留斜線，不要加上 ?url=
-const PROXY_URL = 'https://tw-radio-proxy.krisx-doohan.workers.dev/';
+<!-- ══════════════════════════════════════════
+     ③ 主要播放器 UI
+══════════════════════════════════════════ -->
+<main class="flex-1 px-4 py-6 max-w-lg mx-auto w-full space-y-5">
 
-const STATION_DATA = {
-    'hitfm': {
-        name: 'Hit Fm 聯播網',
-        freq: 'FM 107.7 (台北)',
-        // 【修改2】：直接相加，移除 encodeURIComponent，並確認使用 http://
-        url: PROXY_URL + 'http://hls.hinet.net/live/RA000036/chunklist.m3u8',
-        type: 'hls'
-    },
-    'pop': {
-        name: 'Pop Radio 91.7',
-        freq: 'FM 91.7 (台北)',
-        // 其他電台也比照辦理
-        url: PROXY_URL + 'http://bms.hinet.net/PopRadio/stream',
-        type: 'audio'
-    },
-    'kiss': {
-        name: 'KISS RADIO',
-        freq: 'FM 99.9 (大眾)',
-        url: PROXY_URL + 'http://bms.hinet.net/KISS_RADIO/stream',
-        type: 'audio'
-    }
+  <!-- 3-A  正在播放顯示區 -->
+  <div class="card p-5 text-center fade-in">
+    <!-- 波形動畫 / 播放指示器 -->
+    <div id="visualizer" class="bars-paused flex items-end justify-center gap-1 mb-4 h-8">
+      <span class="bar bg-sky-400 bar-1"></span>
+      <span class="bar bg-sky-300 bar-2"></span>
+      <span class="bar bg-sky-400 bar-3"></span>
+      <span class="bar bg-sky-300 bar-4"></span>
+    </div>
+
+    <!-- 頻道名稱 -->
+    <p id="stationName" class="text-xl font-bold tracking-wide" style="font-family:'Space Grotesk',sans-serif">
+      請選擇電台
+    </p>
+
+    <!-- 頻率顯示 -->
+    <p id="stationFreq" class="text-slate-400 text-sm mt-1 tracking-widest">
+      ─
+    </p>
+
+    <!-- 播放狀態文字 -->
+    <p id="statusText" class="text-slate-500 text-xs mt-2">
+      已就緒
+    </p>
+  </div>
+
+  <!-- 3-B  電台選擇按鈕 -->
+  <div class="grid grid-cols-3 gap-3 fade-in">
+
+    <!-- Hit FM -->
+    <button id="btn-hit" class="station-btn card p-3 text-center rounded-xl flex flex-col items-center gap-1"
+      onclick="selectStation('hit')">
+      <span class="text-2xl">🎵</span>
+      <span class="text-xs font-semibold text-pink-400" style="font-family:'Space Grotesk',sans-serif">Hit FM</span>
+      <span class="text-xs text-slate-500">聯播網</span>
+    </button>
+
+    <!-- Pop Radio -->
+    <button id="btn-pop" class="station-btn card p-3 text-center rounded-xl flex flex-col items-center gap-1"
+      onclick="selectStation('pop')">
+      <span class="text-2xl">🎶</span>
+      <span class="text-xs font-semibold text-violet-400" style="font-family:'Space Grotesk',sans-serif">Pop Radio</span>
+      <span class="text-xs text-slate-500">91.7 FM</span>
+    </button>
+
+    <!-- KISS Radio -->
+    <button id="btn-kiss" class="station-btn card p-3 text-center rounded-xl flex flex-col items-center gap-1"
+      onclick="selectStation('kiss')">
+      <span class="text-2xl">💚</span>
+      <span class="text-xs font-semibold text-emerald-400" style="font-family:'Space Grotesk',sans-serif">KISS</span>
+      <span class="text-xs text-slate-500">99.9 FM</span>
+    </button>
+
+  </div>
+
+  <!-- 3-C  播放控制列 -->
+  <div class="card p-4 flex items-center gap-4 fade-in">
+
+    <!-- 播放 / 暫停按鈕 -->
+    <button id="playBtn" onclick="togglePlay()"
+      class="w-14 h-14 rounded-full bg-sky-500 hover:bg-sky-400 flex items-center justify-center text-white text-3xl shadow-lg transition-all active:scale-95 flex-shrink-0">
+      <i id="playIcon" class="ph-fill ph-play"></i>
+    </button>
+
+    <!-- 音量區 -->
+    <div class="flex-1 flex flex-col gap-1">
+      <div class="flex items-center justify-between">
+        <span class="text-xs text-slate-400 flex items-center gap-1">
+          <i class="ph ph-speaker-low text-slate-400"></i> 音量
+        </span>
+        <span id="volDisplay" class="text-xs text-slate-300 font-mono">80%</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <i class="ph ph-speaker-none text-slate-500 text-sm"></i>
+        <input id="volSlider" type="range" min="0" max="100" value="80"
+          oninput="changeVolume(this.value)" />
+        <i class="ph ph-speaker-high text-slate-500 text-sm"></i>
+      </div>
+    </div>
+
+    <!-- 靜音按鈕 -->
+    <button id="muteBtn" onclick="toggleMute()"
+      class="w-10 h-10 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-slate-300 transition-colors flex-shrink-0">
+      <i id="muteIcon" class="ph ph-speaker-high"></i>
+    </button>
+
+  </div>
+
+  <!-- 3-D  收聽記錄區 -->
+  <div class="fade-in">
+    <div class="flex items-center justify-between mb-2 px-1">
+      <p class="text-sm font-semibold text-slate-300 flex items-center gap-1">
+        <i class="ph ph-clock-clockwise text-sky-400"></i> 收聽記錄
+      </p>
+      <button onclick="clearRecords()"
+        class="text-xs text-slate-500 hover:text-red-400 transition-colors">
+        清除全部
+      </button>
+    </div>
+    <div id="recordsList" class="space-y-2">
+      <!-- 由 JS 動態填入 -->
+      <p class="text-center text-slate-600 text-sm py-4">尚無記錄</p>
+    </div>
+  </div>
+
+</main>
+
+<!-- ══════════════════════════════════════════
+     ④ 底部說明列
+══════════════════════════════════════════ -->
+<footer class="px-4 py-3 text-center text-slate-600 text-xs border-t border-slate-800">
+  台灣廣播 PWA ・ 支援離線安裝 ・ 雲端同步 GitHub
+</footer>
+
+<!-- Toast 通知元素 -->
+<div id="toast"></div>
+
+<!-- 隱藏的 HTML5 Audio 元素 -->
+<audio id="radioAudio" preload="none"></audio>
+
+<!-- ══════════════════════════════════════════
+     ⑤ JavaScript — 核心邏輯
+══════════════════════════════════════════ -->
+<script>
+/* ─────────────────────────────────────────
+   【1】電台資料定義
+   streamUrl: 直播串流 URL（AAC 或 MP3）
+   備用說明：如電台更換 URL，請至官網或 radios.tw 取得最新連結
+───────────────────────────────────────────*/
+const STATIONS = {
+  hit: {
+    id:        'hit',
+    name:      'Hit FM 聯播網',
+    freq:      'FM 107.7 (台北) ／ 全台聯播',
+    colorClass: 'text-pink-400',
+    activeClass:'active-hit',
+    btnId:     'btn-hit',
+    // Hit FM 台北之音官方 HLS/AAC 直播流
+    // 備注：hitoradio.com 官方 player 使用此端點
+    streamUrl: 'https://stream.rcs.revma.com/ypqe39kntk0uv',
+    // 備用 URL（若主流失效，取消下方註解並改 streamUrl）
+    // streamUrl: 'http://cast.hitoradio.com:8000/;',
+  },
+  pop: {
+    id:        'pop',
+    name:      'Pop Radio 91.7',
+    freq:      'FM 91.7',
+    colorClass: 'text-violet-400',
+    activeClass:'active-pop',
+    btnId:     'btn-pop',
+    // Pop Radio 官方串流
+    streamUrl: 'https://stream.rcs.revma.com/an1ugyygzk0uv',
+    // 備用：
+    // streamUrl: 'http://sc.pop.com.tw:8000/pop917',
+  },
+  kiss: {
+    id:        'kiss',
+    name:      'KISS Radio 大眾廣播',
+    freq:      'FM 99.9 (高雄)',
+    colorClass: 'text-emerald-400',
+    activeClass:'active-kiss',
+    btnId:     'btn-kiss',
+    // KISS Radio 官方串流
+    streamUrl: 'https://stream.rcs.revma.com/vss2veygzk0uv',
+    // 備用：
+    // streamUrl: 'http://stream.kiss.com.tw:8000/kiss',
+  }
 };
 
-        let currentStationKey = null;
-        let isPlaying = false;
-        let hlsInstance = null;
-        
-        // 核心資料陣列：存放操作紀錄
-        let records = JSON.parse(localStorage.getItem('radio_records')) || [];
+/* ─────────────────────────────────────────
+   【2】全域狀態 & LocalStorage
+───────────────────────────────────────────*/
+let currentStation = null;    // 目前選中的電台 ID
+let isPlaying      = false;   // 播放中？
+let isMuted        = false;   // 靜音中？
+let records        = [];      // 收聽記錄陣列（與 LocalStorage 同步）
 
-        // --- 【DOM 元素參考】 ---
-        const $ = (id) => document.getElementById(id);
-        
-        const audioPlayer = $('audioPlayer');
-        const playPauseBtn = $('playPauseBtn');
-        const playIcon = $('playIcon');
-        const channelNameEl = $('channelName');
-        const channelFreqEl = $('channelFreq');
-        const volumeSlider = $('volumeSlider');
-        const visualizerContainer = $('visualizerContainer');
-        const glowBg = $('glowBg');
-        const stationBtns = document.querySelectorAll('.station-btn');
-        
-        // 模態視窗與設定元素
-        const settingsModal = $('settingsModal');
-        const ghTokenInput = $('ghToken');
-        const ghOwnerInput = $('ghOwner');
-        const ghRepoInput = $('ghRepo');
-        const ghPathInput = $('ghPath');
-        const historyList = $('historyList');
-        const syncStatus = $('syncStatus');
+// DOM 參考
+const audio       = document.getElementById('radioAudio');
+const playIcon    = document.getElementById('playIcon');
+const muteIcon    = document.getElementById('muteIcon');
+const visualizer  = document.getElementById('visualizer');
+const stationName = document.getElementById('stationName');
+const stationFreq = document.getElementById('stationFreq');
+const statusText  = document.getElementById('statusText');
+const volSlider   = document.getElementById('volSlider');
+const volDisplay  = document.getElementById('volDisplay');
 
-        // --- 【初始化函數】 ---
-        function initApp() {
-            const savedVol = localStorage.getItem('radio_volume');
-            if (savedVol !== null) {
-                audioPlayer.volume = parseFloat(savedVol);
-                volumeSlider.value = savedVol;
-            }
+/* ─────────────────────────────────────────
+   【3】初始化：讀取 LocalStorage
+───────────────────────────────────────────*/
+function init() {
+  // 讀取收聽記錄
+  const savedRecords = localStorage.getItem('tw_radio_records');
+  if (savedRecords) {
+    try { records = JSON.parse(savedRecords); } catch(e) { records = []; }
+  }
 
-            ghTokenInput.value = localStorage.getItem('gh_token') || '';
-            ghOwnerInput.value = localStorage.getItem('gh_owner') || '';
-            ghRepoInput.value = localStorage.getItem('gh_repo') || '';
-            ghPathInput.value = localStorage.getItem('gh_path') || 'records.json';
+  // 讀取 GitHub 設定
+  loadSettings();
 
-            renderHistoryList();
-            registerPWA();
-        }
+  // 還原音量
+  const savedVol = localStorage.getItem('tw_radio_volume');
+  if (savedVol) {
+    audio.volume = parseInt(savedVol) / 100;
+    volSlider.value = savedVol;
+    volDisplay.textContent = savedVol + '%';
+  } else {
+    audio.volume = 0.8;
+  }
 
-        // --- 【PWA 註冊邏輯】 ---
-        function registerPWA() {
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                    navigator.serviceWorker.register('./sw.js')
-                        .then(reg => console.log('ServiceWorker 註冊成功，範圍:', reg.scope))
-                        .catch(err => console.log('ServiceWorker 註冊失敗:', err));
-                });
-            }
-        }
+  // 渲染記錄列表
+  renderRecords();
+}
 
-        // --- 【UI 與播放控制】 ---
+/* ─────────────────────────────────────────
+   【4】電台選擇
+───────────────────────────────────────────*/
+function selectStation(id) {
+  // 移除所有 active 樣式
+  Object.values(STATIONS).forEach(s => {
+    document.getElementById(s.btnId).classList.remove('active-hit','active-pop','active-kiss');
+  });
 
-        function updatePlayStateUI() {
-            if (isPlaying) {
-                playIcon.classList.replace('ph-play', 'ph-pause');
-                playIcon.classList.remove('ml-2'); 
-                visualizerContainer.classList.add('is-playing');
-                glowBg.classList.replace('opacity-20', 'opacity-100');
-            } else {
-                playIcon.classList.replace('ph-pause', 'ph-play');
-                playIcon.classList.add('ml-2');
-                visualizerContainer.classList.remove('is-playing');
-                glowBg.classList.replace('opacity-100', 'opacity-20');
-            }
-        }
+  currentStation = id;
+  const station  = STATIONS[id];
 
-        function actPlayRadio() {
-            if (!currentStationKey) return;
-            
-            audioPlayer.play().then(() => {
-                isPlaying = true;
-                updatePlayStateUI();
-                logRecord('Play', STATION_DATA[currentStationKey].name);
-            }).catch(error => {
-                console.error("播放發生錯誤:", error);
-                isPlaying = false;
-                updatePlayStateUI();
-                alert('無法播放該電台！\n\n原因可能是：\n1. 台灣多數電台僅提供 HTTP 格式，因為你的網站是在 HTTPS (安全連線) 下運行，瀏覽器啟動了「安全防護 (Mixed Content)」強制阻擋了廣播串流。\n2. 或電台網址暫時失效。\n\n【解決方式】：請在電腦瀏覽器網址列左側點擊「網站設定」，將「不安全內容 (Insecure Content)」設為「允許」，即可順利播放 HTTP 電台！');
-            });
-        }
+  // 套用 active 樣式
+  document.getElementById(station.btnId).classList.add(station.activeClass);
 
-        function actPauseRadio() {
-            audioPlayer.pause();
-            isPlaying = false;
-            updatePlayStateUI();
-            logRecord('Pause', STATION_DATA[currentStationKey]?.name || 'Unknown');
-        }
+  // 更新顯示資訊
+  stationName.textContent = station.name;
+  stationName.className   = `text-xl font-bold tracking-wide ${station.colorClass}`;
+  stationFreq.textContent = station.freq;
+  statusText.textContent  = '電台已選擇，按播放開始收聽';
 
-        function togglePlayPause() {
-            if (isPlaying) actPauseRadio();
-            else actPlayRadio();
-        }
+  // 若已在播放，立即切換
+  if (isPlaying) {
+    loadAndPlay(station);
+  }
+}
 
-        function switchStation(key) {
-            stationBtns.forEach(btn => {
-                if (btn.dataset.station === key) btn.classList.add('active');
-                else btn.classList.remove('active');
-            });
+/* ─────────────────────────────────────────
+   【5】播放 / 暫停切換
+───────────────────────────────────────────*/
+function togglePlay() {
+  if (!currentStation) {
+    showToast('請先選擇一個電台 🎙️');
+    return;
+  }
 
-            currentStationKey = key;
-            const data = STATION_DATA[key];
-            
-            channelNameEl.textContent = data.name;
-            channelFreqEl.textContent = data.freq;
-            
-            // 銷毀舊的 HLS 實例
-            if (hlsInstance) {
-                hlsInstance.destroy();
-                hlsInstance = null;
-            }
+  if (isPlaying) {
+    pauseRadio();
+  } else {
+    loadAndPlay(STATIONS[currentStation]);
+  }
+}
 
-            // HLS.js 支援 (.m3u8)
-            if (data.type === 'hls' && Hls.isSupported()) {
-                hlsInstance = new Hls();
-                hlsInstance.loadSource(data.url);
-                hlsInstance.attachMedia(audioPlayer);
-                hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
-                    playPauseBtn.disabled = false;
-                    audioPlayer.muted = false;
-                    actPlayRadio();
-                });
-                hlsInstance.on(Hls.Events.ERROR, function (event, data) {
-                    if (data.fatal) {
-                        alert('HLS 串流發生致命錯誤！(可能受到安全連線限制)');
-                        playPauseBtn.disabled = false;
-                    }
-                });
-            } else {
-                // 原生播放或非 HLS 串流
-                audioPlayer.src = data.url;
-                playPauseBtn.disabled = false;
-                audioPlayer.muted = false;
-                actPlayRadio();
-            }
+// 載入並播放
+function loadAndPlay(station) {
+  statusText.textContent = '⏳ 連線中…';
+  audio.src = station.streamUrl;
+  audio.load();
+  audio.play()
+    .then(() => {
+      setPlayingState(true);
+      statusText.textContent = '🔴 直播中';
+      addRecord(station);          // 寫入收聽記錄
+    })
+    .catch(err => {
+      statusText.textContent = '❌ 無法連線，請稍後再試';
+      console.error('播放失敗：', err);
+      showToast('播放失敗，請確認網路連線 📶');
+      setPlayingState(false);
+    });
+}
 
-            logRecord('Switch Station', data.name);
-        }
+// 暫停
+function pauseRadio() {
+  audio.pause();
+  setPlayingState(false);
+  statusText.textContent = '已暫停';
+}
 
-        stationBtns.forEach(btn => {
-            btn.addEventListener('click', () => switchStation(btn.dataset.station));
-        });
+// 更新 UI 播放狀態
+function setPlayingState(playing) {
+  isPlaying = playing;
+  if (playing) {
+    playIcon.className = 'ph-fill ph-pause';
+    visualizer.classList.remove('bars-paused');
+  } else {
+    playIcon.className = 'ph-fill ph-play';
+    visualizer.classList.add('bars-paused');
+  }
+}
 
-        playPauseBtn.addEventListener('click', togglePlayPause);
+/* ─────────────────────────────────────────
+   【6】音量控制
+───────────────────────────────────────────*/
+function changeVolume(val) {
+  const v = parseInt(val);
+  audio.volume = v / 100;
+  volDisplay.textContent = v + '%';
+  localStorage.setItem('tw_radio_volume', val);
 
-        volumeSlider.addEventListener('input', (e) => {
-            audioPlayer.volume = e.target.value;
-            localStorage.setItem('radio_volume', e.target.value);
-        });
+  // 更新靜音 icon
+  if (v === 0) {
+    muteIcon.className = 'ph ph-speaker-none';
+    isMuted = true;
+  } else if (v < 50) {
+    muteIcon.className = 'ph ph-speaker-low';
+    isMuted = false;
+  } else {
+    muteIcon.className = 'ph ph-speaker-high';
+    isMuted = false;
+  }
+}
 
-        audioPlayer.addEventListener('ended', actPauseRadio);
-        audioPlayer.addEventListener('waiting', () => console.log('Buffering...'));
+// 靜音切換
+let volumeBeforeMute = 80;
+function toggleMute() {
+  if (isMuted) {
+    // 取消靜音
+    const v = volumeBeforeMute;
+    audio.volume = v / 100;
+    volSlider.value = v;
+    volDisplay.textContent = v + '%';
+    muteIcon.className = 'ph ph-speaker-high';
+    isMuted = false;
+  } else {
+    // 靜音
+    volumeBeforeMute = parseInt(volSlider.value);
+    audio.volume = 0;
+    volSlider.value = 0;
+    volDisplay.textContent = '0%';
+    muteIcon.className = 'ph ph-speaker-none';
+    isMuted = true;
+  }
+}
 
-        // --- 【本地紀錄與顯示】 ---
-        function logRecord(action, stationName) {
-            const newRecord = {
-                id: Date.now(),
-                timestamp: new Date().toISOString(),
-                action: action,
-                station: stationName
-            };
-            
-            records.unshift(newRecord);
-            if (records.length > 100) records.length = 100;
-            
-            localStorage.setItem('radio_records', JSON.stringify(records));
-            renderHistoryList();
-            
-            putGitHubData();
-        }
+/* ─────────────────────────────────────────
+   【7】收聽記錄 (records 陣列 ↔ LocalStorage)
+───────────────────────────────────────────*/
+function addRecord(station) {
+  const now = new Date();
+  const record = {
+    id:      Date.now(),
+    station: station.name,
+    freq:    station.freq,
+    time:    now.toLocaleString('zh-TW', { hour12: false }),
+  };
 
-        function renderHistoryList() {
-            if (records.length === 0) {
-                historyList.innerHTML = '<li class="text-center py-2 text-gray-600">暫無播放紀錄</li>';
-                return;
-            }
-            historyList.innerHTML = records.slice(0, 15).map(r => {
-                const time = new Date(r.timestamp).toLocaleTimeString('zh-TW', { hour12: false });
-                const actionColor = r.action === 'Play' ? 'text-green-400' : (r.action === 'Pause' ? 'text-yellow-400' : 'text-blue-400');
-                return `<li class="flex justify-between items-center bg-gray-800/80 px-3 py-2 rounded border border-gray-700/50">
-                    <span class="text-gray-500 font-mono">${time}</span>
-                    <span class="flex-1 ml-3 text-white truncate text-left">${r.station}</span>
-                    <span class="${actionColor} font-semibold">${r.action}</span>
-                </li>`;
-            }).join('');
-        }
+  records.unshift(record);       // 最新放最前
+  if (records.length > 50) records.pop();  // 最多保留 50 筆
 
-        // --- 【設定視窗互動】 ---
-        $('settingsBtn').addEventListener('click', () => settingsModal.classList.remove('hidden'));
-        $('closeSettingsBtn').addEventListener('click', () => settingsModal.classList.add('hidden'));
+  // 同步至 LocalStorage
+  localStorage.setItem('tw_radio_records', JSON.stringify(records));
 
-        $('saveSettingsBtn').addEventListener('click', () => {
-            localStorage.setItem('gh_token', ghTokenInput.value.trim());
-            localStorage.setItem('gh_owner', ghOwnerInput.value.trim());
-            localStorage.setItem('gh_repo', ghRepoInput.value.trim());
-            localStorage.setItem('gh_path', ghPathInput.value.trim());
-            
-            fetchGitHubData().then(() => {
-                setTimeout(() => { settingsModal.classList.add('hidden'); }, 1500);
-            });
-        });
+  // 渲染 UI
+  renderRecords();
 
-        // --- 【雲端同步邏輯 - GitHub API】 ---
+  // 自動同步至 GitHub（若已設定）
+  putGitHubData();
+}
 
-        function utoa(data) {
-            return btoa(unescape(encodeURIComponent(data)));
-        }
-        function atou(b64) {
-            return decodeURIComponent(escape(atob(b64)));
-        }
+function renderRecords() {
+  const container = document.getElementById('recordsList');
+  if (!records.length) {
+    container.innerHTML = '<p class="text-center text-slate-600 text-sm py-4">尚無記錄</p>';
+    return;
+  }
 
-        function getGhConfig() {
-            return {
-                token: localStorage.getItem('gh_token'),
-                owner: localStorage.getItem('gh_owner'),
-                repo: localStorage.getItem('gh_repo'),
-                path: localStorage.getItem('gh_path'),
-                sha: localStorage.getItem('gh_sha')
-            };
-        }
+  container.innerHTML = records.slice(0, 10).map(r => `
+    <div class="card px-4 py-3 flex items-center gap-3 fade-in">
+      <i class="ph ph-radio text-sky-400 text-lg flex-shrink-0"></i>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium truncate">${escapeHtml(r.station)}</p>
+        <p class="text-xs text-slate-500">${escapeHtml(r.freq)}</p>
+      </div>
+      <span class="text-xs text-slate-600 flex-shrink-0">${escapeHtml(r.time)}</span>
+    </div>
+  `).join('');
+}
 
-        /** fetchGitHubData (下載) */
-        async function fetchGitHubData() {
-            const { token, owner, repo, path } = getGhConfig();
-            if (!token || !owner || !repo || !path) {
-                alert('請先填寫完成所有 GitHub 設定');
-                return;
-            }
+function clearRecords() {
+  if (!confirm('確定要清除所有收聽記錄嗎？')) return;
+  records = [];
+  localStorage.removeItem('tw_radio_records');
+  renderRecords();
+  showToast('記錄已清除');
+  putGitHubData();   // 同步清空至 GitHub
+}
 
-            syncStatus.textContent = '雲端拉取中...';
-            syncStatus.className = 'text-xs text-blue-400 font-bold animate-pulse';
+/* ─────────────────────────────────────────
+   【8】GitHub 雲端同步
+   fetchGitHubData()  — 從 GitHub 下載資料
+   putGitHubData()    — 上傳資料至 GitHub
+───────────────────────────────────────────*/
 
-            try {
-                const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `token ${token}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                });
+// 取得 GitHub 設定
+function getGHConfig() {
+  return {
+    token: document.getElementById('ghToken').value.trim(),
+    owner: document.getElementById('ghOwner').value.trim(),
+    repo:  document.getElementById('ghRepo').value.trim(),
+    path:  document.getElementById('ghPath').value.trim() || 'data/records.json',
+  };
+}
 
-                if (response.ok) {
-                    const data = await response.json();
-                    const jsonString = atou(data.content);
-                    const cloudRecords = JSON.parse(jsonString);
-                    
-                    const mergedMap = new Map();
-                    [...records, ...cloudRecords].forEach(r => mergedMap.set(r.id, r));
-                    records = Array.from(mergedMap.values()).sort((a, b) => b.id - a.id);
-                    
-                    if (records.length > 100) records.length = 100;
-                    
-                    localStorage.setItem('radio_records', JSON.stringify(records));
-                    localStorage.setItem('gh_sha', data.sha); 
-                    
-                    renderHistoryList();
-                    syncStatus.textContent = '同步成功！';
-                    syncStatus.className = 'text-xs text-green-400 font-bold';
-                } else if (response.status === 404) {
-                    syncStatus.textContent = '找不到檔案，將創建新檔';
-                    syncStatus.className = 'text-xs text-yellow-500 font-bold';
-                    await putGitHubData(); 
-                } else {
-                    const errObj = await response.json();
-                    throw new Error(errObj.message);
-                }
-            } catch (error) {
-                console.error("Fetch GitHub Error:", error);
-                syncStatus.textContent = '下載失敗: ' + error.message;
-                syncStatus.className = 'text-xs text-red-500 font-bold truncate max-w-[120px]';
-            }
-        }
+// 儲存設定至 LocalStorage（敏感資料僅存本機）
+function saveSettings() {
+  const cfg = getGHConfig();
+  localStorage.setItem('tw_radio_gh_config', JSON.stringify({
+    owner: cfg.owner,
+    repo:  cfg.repo,
+    path:  cfg.path,
+    // 注意：Token 也存本機 LocalStorage，使用者需自行評估安全性
+    token: cfg.token,
+  }));
+}
 
-        /** putGitHubData (上傳) */
-        async function putGitHubData() {
-            const { token, owner, repo, path, sha } = getGhConfig();
-            if (!token || !owner || !repo || !path) return;
+// 讀取設定
+function loadSettings() {
+  const saved = localStorage.getItem('tw_radio_gh_config');
+  if (!saved) return;
+  try {
+    const cfg = JSON.parse(saved);
+    document.getElementById('ghToken').value = cfg.token || '';
+    document.getElementById('ghOwner').value = cfg.owner || '';
+    document.getElementById('ghRepo').value  = cfg.repo  || '';
+    document.getElementById('ghPath').value  = cfg.path  || 'data/records.json';
+  } catch(e) {}
+}
 
-            syncStatus.textContent = '上傳同步中...';
-            syncStatus.className = 'text-xs text-blue-400 animate-pulse';
+/**
+ * fetchGitHubData() — 從 GitHub 下載 records 並合併
+ */
+async function fetchGitHubData() {
+  const cfg = getGHConfig();
+  if (!cfg.token || !cfg.owner || !cfg.repo) {
+    showToast('請先填寫 GitHub 設定 ⚙️');
+    return;
+  }
 
-            try {
-                const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-                const fileContentStr = JSON.stringify(records, null, 2);
-                
-                const body = {
-                    message: `Auto-sync: update radio records ${new Date().toLocaleString()}`,
-                    content: utoa(fileContentStr)
-                };
-                if (sha) body.sha = sha;
+  const syncBtn = document.getElementById('syncBtn');
+  syncBtn.innerHTML = '<i class="ph ph-circle-notch spinner"></i>';
 
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(body)
-                });
+  const apiUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
 
-                if (response.ok) {
-                    const data = await response.json();
-                    localStorage.setItem('gh_sha', data.content.sha);
-                    syncStatus.textContent = '已更新至雲端';
-                    syncStatus.className = 'text-xs text-green-400 font-bold';
-                    
-                    // 恢復狀態字樣
-                    setTimeout(() => { syncStatus.textContent = '已就緒'; syncStatus.className = 'text-xs text-gray-500'; }, 3000);
-                } else if (response.status === 409) {
-                    // Conflict
-                    syncStatus.textContent = '版本衝突，嘗試合併...';
-                    syncStatus.className = 'text-xs text-yellow-400 animate-pulse';
-                    await fetchGitHubData();
-                } else {
-                    const errObj = await response.json();
-                    throw new Error(errObj.message);
-                }
-            } catch (error) {
-                console.error("Put GitHub Error:", error);
-                syncStatus.textContent = '上傳失敗: ' + error.message;
-                syncStatus.className = 'text-xs text-red-500 font-bold truncate max-w-[120px]';
-            }
-        }
+  try {
+    const res = await fetch(apiUrl, {
+      headers: {
+        'Authorization': `token ${cfg.token}`,
+        'Accept': 'application/vnd.github.v3+json',
+      }
+    });
 
-        // 啟動應用程式
-        initApp();
-    </script>
+    if (res.status === 404) {
+      showToast('遠端尚無資料，將在上傳時建立');
+      return;
+    }
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data    = await res.json();
+    const decoded = atob(data.content.replace(/\n/g, ''));  // Base64 解碼
+    const remote  = JSON.parse(decoded);
+
+    // 以遠端資料覆蓋本機（可依需求改為合併邏輯）
+    if (Array.isArray(remote)) {
+      records = remote;
+      localStorage.setItem('tw_radio_records', JSON.stringify(records));
+      renderRecords();
+      showToast(`已從 GitHub 下載 ${records.length} 筆記錄 ☁️`);
+    }
+  } catch(err) {
+    console.error('fetchGitHubData 失敗：', err);
+    showToast('下載失敗：' + err.message);
+  } finally {
+    syncBtn.innerHTML = '<i class="ph ph-cloud-arrow-up"></i>';
+  }
+}
+
+/**
+ * putGitHubData() — 上傳 records 至 GitHub
+ * 若檔案不存在則建立，若已存在則更新（需傳入 SHA）
+ */
+async function putGitHubData() {
+  const cfg = getGHConfig();
+  if (!cfg.token || !cfg.owner || !cfg.repo) return;  // 未設定則靜默跳過
+
+  const apiUrl  = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(records, null, 2))));  // UTF-8 Base64 編碼
+
+  try {
+    // 先取得現有 SHA（若檔案存在）
+    let sha = null;
+    const checkRes = await fetch(apiUrl, {
+      headers: {
+        'Authorization': `token ${cfg.token}`,
+        'Accept': 'application/vnd.github.v3+json',
+      }
+    });
+    if (checkRes.ok) {
+      const checkData = await checkRes.json();
+      sha = checkData.sha;
+    }
+
+    // PUT 請求建立或更新
+    const body = {
+      message: `📻 Update radio records [${new Date().toISOString()}]`,
+      content,
+      ...(sha ? { sha } : {}),     // 更新時須帶 SHA
+    };
+
+    const putRes = await fetch(apiUrl, {
+      method:  'PUT',
+      headers: {
+        'Authorization': `token ${cfg.token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!putRes.ok) throw new Error(`HTTP ${putRes.status}`);
+
+    showToast('已同步至 GitHub ✅');
+  } catch(err) {
+    console.error('putGitHubData 失敗：', err);
+    // 靜默失敗，不打擾使用者
+  }
+}
+
+// 手動觸發同步（導覽列雲端按鈕）
+function triggerSync() {
+  putGitHubData();
+}
+
+/* ─────────────────────────────────────────
+   【9】UI 輔助功能
+───────────────────────────────────────────*/
+
+// 設定面板開關
+function toggleSettings() {
+  const panel = document.getElementById('settingsPanel');
+  panel.classList.toggle('hidden');
+}
+
+// Toast 通知
+let toastTimer;
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+}
+
+// HTML 轉義（防 XSS）
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+
+/* ─────────────────────────────────────────
+   【10】Audio 事件監聽
+───────────────────────────────────────────*/
+audio.addEventListener('waiting', () => {
+  statusText.textContent = '⏳ 緩衝中…';
+});
+
+audio.addEventListener('playing', () => {
+  statusText.textContent = '🔴 直播中';
+  setPlayingState(true);
+});
+
+audio.addEventListener('error', () => {
+  statusText.textContent = '❌ 串流連線失敗';
+  setPlayingState(false);
+  showToast('串流連線失敗，請稍後重試');
+});
+
+audio.addEventListener('ended', () => {
+  statusText.textContent = '已停止';
+  setPlayingState(false);
+});
+
+/* ─────────────────────────────────────────
+   【11】PWA Service Worker 註冊
+───────────────────────────────────────────*/
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg  => console.log('✅ SW 已註冊：', reg.scope))
+      .catch(err => console.warn('⚠️ SW 註冊失敗：', err));
+  });
+}
+
+/* ─────────────────────────────────────────
+   【12】啟動
+───────────────────────────────────────────*/
+init();
+</script>
 </body>
 </html>

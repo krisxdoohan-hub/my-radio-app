@@ -1,20 +1,24 @@
 {
-  "name": "Taiwan Radio Player",
-  "short_name": "TW Radio",
+  "name": "台灣廣播 — 線上收聽",
+  "short_name": "台灣廣播",
+  "description": "Hit FM / Pop Radio / KISS Radio 線上收聽 PWA",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#111827",
-  "theme_color": "#111827",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "https://api.iconify.design/ph:radio-bold.svg?color=%233b82f6&width=192&height=192",
+      "src": "./icon.png",
       "sizes": "192x192",
-      "type": "image/svg+xml"
+      "type": "image/png"
     },
     {
-      "src": "https://api.iconify.design/ph:radio-bold.svg?color=%233b82f6&width=512&height=512",
+      "src": "./icon.png",
       "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/png"
     }
-  ]
+  ],
+  "categories": ["music", "entertainment"],
+  "lang": "zh-TW"
 }
