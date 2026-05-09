@@ -73,6 +73,7 @@
         <div class="text-xl font-bold flex items-center gap-2">
             <i class="ph ph-waves text-blue-500 text-3xl"></i>
             <span class="tracking-wider">TW<span class="text-blue-500">Radio</span></span>
+            <span id="versionBadge" class="text-[10px] text-gray-600 font-mono self-end mb-1">v0.0.0</span>
         </div>
         <button id="settingsBtn" class="p-2 rounded-full hover:bg-gray-800 transition active:scale-95">
             <i class="ph ph-cloud-arrow-up text-2xl text-gray-300"></i>
@@ -202,8 +203,13 @@
         /**
          * =========================================
          * 台灣廣播精選 (Taiwan Radio) - Vanilla JS
+         * Version: 0.0.0
          * =========================================
          */
+
+        // --- 【版本號】 ---
+        const APP_VERSION = '0.0.0';
+        document.getElementById('versionBadge').textContent = 'v' + APP_VERSION;
 
         // --- 【全域變數與資料】 ---
         
@@ -571,4 +577,3 @@ const STATION_DATA = {
     </script>
 </body>
 </html>
-
