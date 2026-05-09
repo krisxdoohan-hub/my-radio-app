@@ -1,4 +1,5 @@
-const CACHE_NAME = 'tw-radio-cache-v1';
+const APP_VERSION = '0.0.0';
+const CACHE_NAME = `tw-radio-cache-${APP_VERSION}`;
 const urlsToCache = [
   './index.html',
   './manifest.json',
