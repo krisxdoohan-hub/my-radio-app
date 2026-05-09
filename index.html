@@ -321,6 +321,7 @@
 ══════════════════════════════════════════ -->
 <footer class="px-4 py-3 text-center text-slate-600 text-xs border-t border-slate-800">
   台灣廣播 PWA ・ 支援離線安裝 ・ 雲端同步 GitHub
+  ・ <span id="versionDisplay"></span>
 </footer>
 
 <!-- Toast 通知元素 -->
@@ -333,6 +334,18 @@
      ⑤ JavaScript — 核心邏輯
 ══════════════════════════════════════════ -->
 <script>
+/* ─────────────────────────────────────────
+   【0】版本號
+   每次修改程式後請遞增此版號（語意化版本：主版.次版.修訂）
+   同時須同步修改 sw.js 中的 CACHE_NAME，
+   以強制所有裝置清除舊快取、載入最新程式碼。
+   目前版本：v0.0.0
+───────────────────────────────────────────*/
+const APP_VERSION = '0.0.0';
+
+// 顯示版本號於頁尾
+document.getElementById('versionDisplay').textContent = 'v' + APP_VERSION;
+
 /* ─────────────────────────────────────────
    【1】電台資料定義
    streamUrl: 直播串流 URL（AAC 或 MP3）
