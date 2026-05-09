@@ -339,17 +339,20 @@
    每次修改程式後請遞增此版號（語意化版本：主版.次版.修訂）
    同時須同步修改 sw.js 中的 CACHE_NAME，
    以強制所有裝置清除舊快取、載入最新程式碼。
-   目前版本：v0.0.0
+   目前版本：v0.0.1
 ───────────────────────────────────────────*/
-const APP_VERSION = '0.0.0';
+const APP_VERSION = '0.0.1';
 
 // 顯示版本號於頁尾
 document.getElementById('versionDisplay').textContent = 'v' + APP_VERSION;
 
 /* ─────────────────────────────────────────
    【1】電台資料定義
-   streamUrl: 直播串流 URL（AAC 或 MP3）
-   備用說明：如電台更換 URL，請至官網或 radios.tw 取得最新連結
+   streamUrls: 依序嘗試的備用 URL 陣列（第一個失敗自動試下一個）
+   radioBrowserName: 用於查詢 radio-browser.info 公開 API 的搜尋關鍵字
+                     作為最終動態備援（所有硬編碼 URL 都失敗時才觸發）
+   ★ 如何新增備用 URL：
+     直接在對應電台的 streamUrls 陣列最前面插入新 URL 即可。
 ───────────────────────────────────────────*/
 const STATIONS = {
   hit: {
@@ -359,11 +362,15 @@ const STATIONS = {
     colorClass: 'text-pink-400',
     activeClass:'active-hit',
     btnId:     'btn-hit',
-    // Hit FM 台北之音官方 HLS/AAC 直播流
-    // 備注：hitoradio.com 官方 player 使用此端點
-    streamUrl: 'https://vod.hitoradio.com/hls/hitfm_north.m3u8',
-    // 備用 URL（若主流失效，取消下方註解並改 streamUrl）
-    // streamUrl: 'https://vod.hitoradio.com/live/hitfm_north/playlist.m3u8',
+    radioBrowserName: 'Hit FM',   // radio-browser.info 動態查詢關鍵字
+    // 多組備用串流 URL，依序嘗試
+    streamUrls: [
+      'https://cast.hitoradio.com/hitoradio_aac',         // 官方 AAC
+      'http://cast.hitoradio.com:8000/hitoradio_aac',     // 官方 AAC (http)
+      'https://cast.hitoradio.com/hitoradio',             // 官方備用
+      'http://cast.hitoradio.com:8000/',                  // Icecast root
+      'https://stream.rcs.revma.com/ypqe39kntk0uv',      // REVMA (可能過期)
+    ],
   },
   pop: {
     id:        'pop',
@@ -372,10 +379,14 @@ const STATIONS = {
     colorClass: 'text-violet-400',
     activeClass:'active-pop',
     btnId:     'btn-pop',
-    // Pop Radio 官方串流
-    streamUrl: 'https://stream.rcs.revma.com/an1ugyygzk0uv',
-    // 備用：
-    // streamUrl: 'http://sc.pop.com.tw:8000/pop917',
+    radioBrowserName: 'Pop Radio 91.7',
+    streamUrls: [
+      'https://stream.pop.com.tw/pop917',                  // 官方 HTTPS
+      'http://stream.pop.com.tw/pop917',                   // 官方 HTTP
+      'http://sc.pop.com.tw:8000/pop917',                  // Icecast
+      'http://sc.pop.com.tw:8000/',                        // Icecast root
+      'https://stream.rcs.revma.com/an1ugyygzk0uv',        // REVMA (可能過期)
+    ],
   },
   kiss: {
     id:        'kiss',
@@ -384,10 +395,14 @@ const STATIONS = {
     colorClass: 'text-emerald-400',
     activeClass:'active-kiss',
     btnId:     'btn-kiss',
-    // KISS Radio 官方串流
-    streamUrl: 'http://stream.kiss.com.tw:8000/kiss256.mp3',
-    // 備用：
-    // streamUrl: 'http://stream.kiss.com.tw:8000/kiss128.mp3',
+    radioBrowserName: 'KISS Radio',
+    streamUrls: [
+      'https://stream.kiss.com.tw:8000/kiss',              // 官方 HTTPS
+      'http://stream.kiss.com.tw:8000/kiss',               // 官方 HTTP
+      'https://cast.kiss.com.tw/kissradio',                // 備用
+      'http://media.kiss.com.tw:8000/kissaac',             // AAC 備用
+      'https://stream.rcs.revma.com/vss2veygzk0uv',        // REVMA (可能過期)
+    ],
   }
 };
 
@@ -480,23 +495,115 @@ function togglePlay() {
   }
 }
 
-// 載入並播放
-function loadAndPlay(station) {
+// 載入並播放（含自動備援邏輯）
+async function loadAndPlay(station) {
+  // 先嘗試本機快取的可用 URL（上次成功的那個）
+  const cachedUrl = localStorage.getItem('tw_radio_url_' + station.id);
+  let urlsToTry = [...station.streamUrls];  // 複製備用清單
+  if (cachedUrl && !urlsToTry.includes(cachedUrl)) {
+    urlsToTry.unshift(cachedUrl);  // 快取 URL 優先嘗試
+  } else if (cachedUrl) {
+    // 把快取的移到最前面
+    urlsToTry = [cachedUrl, ...urlsToTry.filter(u => u !== cachedUrl)];
+  }
+
   statusText.textContent = '⏳ 連線中…';
-  audio.src = station.streamUrl;
-  audio.load();
-  audio.play()
-    .then(() => {
+
+  // ── 依序嘗試每個 URL ──
+  for (let i = 0; i < urlsToTry.length; i++) {
+    const url = urlsToTry[i];
+    statusText.textContent = `⏳ 嘗試連線 (${i + 1}/${urlsToTry.length})…`;
+    const ok = await tryPlayUrl(url, station);
+    if (ok) {
+      // 成功：把這個 URL 存入快取供下次優先使用
+      localStorage.setItem('tw_radio_url_' + station.id, url);
+      return;
+    }
+  }
+
+  // ── 所有硬編碼 URL 都失敗 → 查詢 radio-browser.info API ──
+  statusText.textContent = '🔍 查詢線上電台資料庫…';
+  const apiUrl = await fetchRadioBrowserUrl(station.radioBrowserName);
+  if (apiUrl) {
+    statusText.textContent = '⏳ 使用動態串流連線…';
+    const ok = await tryPlayUrl(apiUrl, station);
+    if (ok) {
+      localStorage.setItem('tw_radio_url_' + station.id, apiUrl);
+      return;
+    }
+  }
+
+  // ── 全部失敗 ──
+  statusText.textContent = '❌ 無法連線，請稍後再試';
+  showToast('所有串流均失敗，請稍後再試或到官網收聽 📻');
+  setPlayingState(false);
+}
+
+// 嘗試單一 URL，回傳 true（成功）或 false（失敗）
+function tryPlayUrl(url, station) {
+  return new Promise(resolve => {
+    // 設定 5 秒超時
+    const timeout = setTimeout(() => {
+      audio.pause();
+      audio.src = '';
+      resolve(false);
+    }, 8000);
+
+    audio.src = url;
+    audio.load();
+
+    const onPlay = () => {
+      clearTimeout(timeout);
+      cleanup();
       setPlayingState(true);
       statusText.textContent = '🔴 直播中';
-      addRecord(station);          // 寫入收聽記錄
-    })
-    .catch(err => {
-      statusText.textContent = '❌ 無法連線，請稍後再試';
-      console.error('播放失敗：', err);
-      showToast('播放失敗，請確認網路連線 📶');
-      setPlayingState(false);
+      addRecord(station);
+      resolve(true);
+    };
+
+    const onError = () => {
+      clearTimeout(timeout);
+      cleanup();
+      resolve(false);
+    };
+
+    const cleanup = () => {
+      audio.removeEventListener('playing', onPlay);
+      audio.removeEventListener('error',   onError);
+    };
+
+    audio.addEventListener('playing', onPlay,   { once: true });
+    audio.addEventListener('error',   onError,  { once: true });
+
+    audio.play().catch(() => {
+      // play() rejected 不代表串流壞掉（可能只是 autoplay policy）
+      // 交給 error 事件處理，這裡不提前 resolve
     });
+  });
+}
+
+// 查詢 radio-browser.info 取得動態串流 URL
+async function fetchRadioBrowserUrl(stationName) {
+  const encoded = encodeURIComponent(stationName);
+  const endpoints = [
+    `https://de1.api.radio-browser.info/json/stations/search?name=${encoded}&countrycode=TW&limit=5&hidebroken=true&order=votes&reverse=true`,
+    `https://nl1.api.radio-browser.info/json/stations/search?name=${encoded}&countrycode=TW&limit=5&hidebroken=true&order=votes&reverse=true`,
+    `https://at1.api.radio-browser.info/json/stations/search?name=${encoded}&countrycode=TW&limit=5&hidebroken=true&order=votes&reverse=true`,
+  ];
+  for (const endpoint of endpoints) {
+    try {
+      const res  = await fetch(endpoint, { headers: { 'User-Agent': 'TaiwanRadioPWA/0.0.1' } });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.length > 0) {
+        // 優先取 url_resolved（已解析的直接串流），其次取 url
+        return data[0].url_resolved || data[0].url || null;
+      }
+    } catch (e) {
+      continue;  // 換下一個 endpoint
+    }
+  }
+  return null;
 }
 
 // 暫停
