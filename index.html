@@ -356,53 +356,36 @@ document.getElementById('versionDisplay').textContent = 'v' + APP_VERSION;
 ───────────────────────────────────────────*/
 const STATIONS = {
   hit: {
-    id:        'hit',
-    name:      'Hit FM 聯播網',
-    freq:      'FM 107.7 (台北) ／ 全台聯播',
+    id: 'hit',
+    name: 'Hit FM 聯播網',
+    freq: 'FM 107.7',
     colorClass: 'text-pink-400',
-    activeClass:'active-hit',
-    btnId:     'btn-hit',
-    radioBrowserName: 'Hit FM',   // radio-browser.info 動態查詢關鍵字
-    // 多組備用串流 URL，依序嘗試
-    streamUrls: [
-      'https://cast.hitoradio.com/hitoradio_aac',         // 官方 AAC
-      'http://cast.hitoradio.com:8000/hitoradio_aac',     // 官方 AAC (http)
-      'https://cast.hitoradio.com/hitoradio',             // 官方備用
-      'http://cast.hitoradio.com:8000/',                  // Icecast root
-      'https://stream.rcs.revma.com/ypqe39kntk0uv',      // REVMA (可能過期)
-    ],
+    activeClass: 'active-hit',
+    btnId: 'btn-hit',
+    radioBrowserName: 'Hit FM',
+    streamUrls: []
   },
+
   pop: {
-    id:        'pop',
-    name:      'Pop Radio 91.7',
-    freq:      'FM 91.7',
+    id: 'pop',
+    name: 'Pop Radio 91.7',
+    freq: 'FM 91.7',
     colorClass: 'text-violet-400',
-    activeClass:'active-pop',
-    btnId:     'btn-pop',
-    radioBrowserName: 'Pop Radio 91.7',
-    streamUrls: [
-      'https://stream.pop.com.tw/pop917',                  // 官方 HTTPS
-      'http://stream.pop.com.tw/pop917',                   // 官方 HTTP
-      'http://sc.pop.com.tw:8000/pop917',                  // Icecast
-      'http://sc.pop.com.tw:8000/',                        // Icecast root
-      'https://stream.rcs.revma.com/an1ugyygzk0uv',        // REVMA (可能過期)
-    ],
+    activeClass: 'active-pop',
+    btnId: 'btn-pop',
+    radioBrowserName: 'POP Radio',
+    streamUrls: []
   },
+
   kiss: {
-    id:        'kiss',
-    name:      'KISS Radio 大眾廣播',
-    freq:      'FM 99.9 (高雄)',
+    id: 'kiss',
+    name: 'KISS Radio',
+    freq: 'FM 99.9',
     colorClass: 'text-emerald-400',
-    activeClass:'active-kiss',
-    btnId:     'btn-kiss',
-    radioBrowserName: 'KISS Radio',
-    streamUrls: [
-      'https://stream.kiss.com.tw:8000/kiss',              // 官方 HTTPS
-      'http://stream.kiss.com.tw:8000/kiss',               // 官方 HTTP
-      'https://cast.kiss.com.tw/kissradio',                // 備用
-      'http://media.kiss.com.tw:8000/kissaac',             // AAC 備用
-      'https://stream.rcs.revma.com/vss2veygzk0uv',        // REVMA (可能過期)
-    ],
+    activeClass: 'active-kiss',
+    btnId: 'btn-kiss',
+    radioBrowserName: 'KISS Radio Taiwan',
+    streamUrls: []
   }
 };
 
@@ -523,10 +506,11 @@ async function loadAndPlay(station) {
 
   // ── 所有硬編碼 URL 都失敗 → 查詢 radio-browser.info API ──
   statusText.textContent = '🔍 查詢線上電台資料庫…';
-  const apiUrl = await fetchRadioBrowserUrl(station.radioBrowserName);
-  if (apiUrl) {
-    statusText.textContent = '⏳ 使用動態串流連線…';
+  const urls = await fetchRadioBrowserUrls(station.radioBrowserName);
+
+  for (const apiUrl of urls) {
     const ok = await tryPlayUrl(apiUrl, station);
+
     if (ok) {
       localStorage.setItem('tw_radio_url_' + station.id, apiUrl);
       return;
@@ -547,7 +531,7 @@ function tryPlayUrl(url, station) {
       audio.pause();
       audio.src = '';
       resolve(false);
-    }, 8000);
+    }, 15000);
 
     audio.src = url;
     audio.load();
@@ -583,28 +567,36 @@ function tryPlayUrl(url, station) {
 }
 
 // 查詢 radio-browser.info 取得動態串流 URL
-async function fetchRadioBrowserUrl(stationName) {
-  const encoded = encodeURIComponent(stationName);
-  const endpoints = [
-    `https://de1.api.radio-browser.info/json/stations/search?name=${encoded}&countrycode=TW&limit=5&hidebroken=true&order=votes&reverse=true`,
-    `https://nl1.api.radio-browser.info/json/stations/search?name=${encoded}&countrycode=TW&limit=5&hidebroken=true&order=votes&reverse=true`,
-    `https://at1.api.radio-browser.info/json/stations/search?name=${encoded}&countrycode=TW&limit=5&hidebroken=true&order=votes&reverse=true`,
-  ];
-  for (const endpoint of endpoints) {
-    try {
-      const res  = await fetch(endpoint, { headers: { 'User-Agent': 'TaiwanRadioPWA/0.0.1' } });
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (data.length > 0) {
-        // 優先取 url_resolved（已解析的直接串流），其次取 url
-        return data[0].url_resolved || data[0].url || null;
-      }
-    } catch (e) {
-      continue;  // 換下一個 endpoint
+async function fetchRadioBrowserUrls(keyword) {
+
+  const encoded = encodeURIComponent(keyword);
+
+  const endpoint =
+    `https://de1.api.radio-browser.info/json/stations/search?name=${encoded}&countrycode=TW&hidebroken=true&limit=30`;
+
+  try {
+
+    const res = await fetch(endpoint);
+
+    if (!res.ok) {
+      return [];
     }
+
+    const data = await res.json();
+
+    return data
+      .filter(x => x.url_resolved)
+      .map(x => x.url_resolved)
+      .filter(url => url.startsWith('https://'));
+
+  } catch (e) {
+
+    console.error(e);
+
+    return [];
   }
-  return null;
 }
+
 
 // 暫停
 function pauseRadio() {
